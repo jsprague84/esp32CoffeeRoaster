@@ -108,7 +108,7 @@ void handleDataRequest(); // Prototype for the /data endpoint
 void setup() {
     Serial.begin(115200);
     delay(1000);
-    DEBUG_PRINTLN("Starting Coffee Roaster Controller...");
+    DEBUG_PRINTLN("Starting Coffee Roaster Control...");
 
     // Initialize EEPROM
     EEPROM.begin(512);
