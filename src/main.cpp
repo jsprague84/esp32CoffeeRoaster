@@ -320,7 +320,7 @@ void handleWebServer() {
     html += "body { font-family: Arial, sans-serif; background-color: #121212; color: #e0e0e0; margin: 0; padding: 0; display: flex; flex-direction: column; align-items: center; }";
     html += "h1 { color: #2196F3; text-align: center; margin-top: 20px; font-size: 2.5em; text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5); }";
     html += "h2 { color: #64B5F6; text-align: center; margin-bottom: 20px; font-size: 1.8em; text-shadow: 1px 1px 3px rgba(0, 0, 0, 0.5); }";
-    html += "table { border-collapse: collapse; width: 80%; margin: 20px auto; background-color: #1e1e1e; border-radius: 8px; overflow: hidden; box-shadow: 0 8px 16px rgba(0, 0, 0, 0.3); transition: transform 0.3s ease; }";
+    html += "table { border-collapse: collapse; width: 50%; margin: 20px auto; background-color: #1e1e1e; border-radius: 8px; overflow: hidden; box-shadow: 0 8px 16px rgba(0, 0, 0, 0.3); transition: transform 0.3s ease; }";
     html += "table:hover { transform: scale(1.02); }";
     html += "th, td { border: 1px solid #333; padding: 15px; text-align: center; font-size: 1.1em; }";
     html += "th { background-color: #2196F3; color: white; font-weight: bold; text-transform: uppercase; }";
@@ -370,7 +370,7 @@ void handleWebServer() {
     html += "</div>";
     html += "<div style='margin-top: 20px;'>"; // Debug Table
     html += "<h3>Debug Log</h3>";
-    html += "<table id='debugTable' style='width: 80%; border-collapse: collapse; background-color: #1e1e1e; color: #e0e0e0;'>";
+    html += "<table id='debugTable' style='width: 100%; border-collapse: collapse; background-color: #1e1e1e; color: #e0e0e0;'>";
     html += "<thead><tr>";
     html += "<th style='border: 1px solid #333; padding: 10px; text-align: left; width: 20%;'>Timestamp</th>"; // Set width for timestamp column
     html += "<th style='border: 1px solid #333; padding: 10px; text-align: left; width: 80%;'>Message</th>";    // Set width for message column
