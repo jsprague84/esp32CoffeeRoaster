@@ -276,16 +276,19 @@ void handleWebServer() {
     html += "<title>ESP32 Coffee Roaster</title>";
     html += "<style>";
     html += "body { font-family: Arial, sans-serif; background-color: #121212; color: #e0e0e0; margin: 0; padding: 0; display: flex; flex-direction: column; align-items: center; }";
-    html += "h1 { color: #2196F3; text-align: center; margin-top: 20px; }";
-    html += "h2 { color: #64B5F6; text-align: center; margin-bottom: 20px; }";
-    html += "table { border-collapse: collapse; width: 60%; margin: 20px auto; background-color: #1e1e1e; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2); }";
-    html += "th, td { border: 1px solid #333; padding: 10px; text-align: center; }";
-    html += "th { background-color: #2196F3; color: white; font-weight: bold; }";
+    html += "h1 { color: #2196F3; text-align: center; margin-top: 20px; font-size: 2.5em; text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5); }";
+    html += "h2 { color: #64B5F6; text-align: center; margin-bottom: 20px; font-size: 1.8em; text-shadow: 1px 1px 3px rgba(0, 0, 0, 0.5); }";
+    html += "table { border-collapse: collapse; width: 80%; margin: 20px auto; background-color: #1e1e1e; border-radius: 8px; overflow: hidden; box-shadow: 0 8px 16px rgba(0, 0, 0, 0.3); transition: transform 0.3s ease; }";
+    html += "table:hover { transform: scale(1.02); }";
+    html += "th, td { border: 1px solid #333; padding: 15px; text-align: center; font-size: 1.1em; }";
+    html += "th { background-color: #2196F3; color: white; font-weight: bold; text-transform: uppercase; }";
     html += "td { color: #BBDEFB; }";
     html += "tr:nth-child(even) { background-color: #2c2c2c; }";
-    html += "tr:hover { background-color: #37474F; }";
-    html += "table, th, td { border-radius: 8px; }";
+    html += "tr:hover { background-color: #37474F; cursor: pointer; transition: background-color 0.3s ease; }";
     html += "footer { margin-top: 20px; color: #757575; font-size: 14px; text-align: center; }";
+    html += "button { background-color: #2196F3; color: white; border: none; padding: 10px 20px; border-radius: 5px; font-size: 1em; cursor: pointer; box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2); transition: background-color 0.3s ease, transform 0.2s ease; }";
+    html += "button:hover { background-color: #1976D2; transform: scale(1.05); }";
+    html += "button:active { transform: scale(0.95); }";
     html += "</style>";
     html += "</head><body>";
     html += "<h1>ESP32 Coffee Roaster Dashboard</h1>";
@@ -306,7 +309,7 @@ void handleWebServer() {
     html += "<footer>ESP32 Coffee Roaster &copy; 2025</footer>";
     html += "<script>";
     html += "function fetchData() {";
-    html += "  fetch('/data')"; // AJAX request to /data endpoint
+    html += "  fetch('/data')";
     html += "    .then(response => response.json())";
     html += "    .then(data => {";
     html += "      document.getElementById('beanTemp').innerHTML = data.beanTemp + ' °C';";
@@ -321,7 +324,7 @@ void handleWebServer() {
     html += "      document.getElementById('Kd').innerHTML = data.Kd;";
     html += "    });";
     html += "}";
-    html += "setInterval(fetchData, 1000);"; // Refresh every 1 second
+    html += "setInterval(fetchData, 1000);";
     html += "</script>";
     html += "</body></html>";
 
