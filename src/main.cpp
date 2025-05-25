@@ -9,6 +9,7 @@
 #include <EEPROM.h>
 #include <WebServer.h>
 #include "driver/gpio.h"
+#include "config.h"
 
 // Debugging Macro
 #define DEBUG true
@@ -22,9 +23,9 @@
   #define DEBUG_PRINTF(fmt, ...)
 #endif
 
-// Wi-Fi Credentials
-const char* ssid = "jsprague";
-const char* password = "d2422ab770";
+// Wi-Fi Credentials *use seperate config.h file to set these, or uncomment below*
+//const char* ssid = "your_SSID";
+//const char* password = "your_PASSWORD";
 
 // Web Server
 WebServer server(80);
