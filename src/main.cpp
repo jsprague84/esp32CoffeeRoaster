@@ -110,6 +110,12 @@ void handleToggleControlMode(); // Prototype for the /toggleControlMode endpoint
 void handleUpdateBeanSetpoint(); // Prototype for the /updateBeanSetpoint endpoint
 void handleUpdateHeaterPwm(); // Prototype for the /updateHeaterPwm endpoint
 void handleUpdateFanPwm(); // Prototype for the /updateFanPwm endpoint
+void handleDebugRequest(); // Prototype for the /debug endpoint
+void updateDebugMessage(const String& message); // Prototype for updating debug messages
+
+String latestDebugMessage = "Debug log initialized."; // Store the latest debug message
+
+bool wasWiFiConnected = false; // Tracks the previous Wi-Fi connection status
 
 void setup() {
     Serial.begin(115200);
@@ -164,11 +170,17 @@ void setup() {
     server.on("/updateBeanSetpoint", HTTP_POST, handleUpdateBeanSetpoint);
     server.on("/updateHeaterPwm", HTTP_POST, handleUpdateHeaterPwm); // Register Heater PWM endpoint
     server.on("/updateFanPwm", HTTP_POST, handleUpdateFanPwm);       // Register Fan PWM endpoint
+    server.on("/debug", HTTP_GET, handleDebugRequest); // Register Debug endpoint
     server.begin();
     DEBUG_PRINTLN("Web Server Started");
 }
 
 void loop() {
+    // Check Wi-Fi connection status and reconnect if necessary
+    if (WiFi.status() != WL_CONNECTED && wasWiFiConnected) {
+        connectToWiFi(ssid, password); // Attempt to reconnect if disconnected
+    }
+
     ArduinoOTA.handle();
     modbusTCP.task();
     server.handleClient();
@@ -203,7 +215,6 @@ void loop() {
         // Heater Override OFF - Always Disable Heater
         heaterOutput = 0;
         ledcWrite(0, 0);
-        //DEBUG_PRINTLN("Heater Override Active: Heater Disabled");
     } else {
         // Heater Override ON - Proceed with Normal Control Logic
         if (controlMode == MODE_MANUAL) {
@@ -236,19 +247,19 @@ void loop() {
 
     // Periodic Serial Output
     if (millis() - lastSerialOutput >= serialOutputInterval) {
-    lastSerialOutput = millis();
-    DEBUG_PRINTLN("Modbus Register Values:");
-    DEBUG_PRINTF("0: Bean Temp (BT)        = %d\n", modbusTCP.Hreg(REG_BEAN_TEMP));
-    DEBUG_PRINTF("1: Env Temp (ET)         = %d\n", modbusTCP.Hreg(REG_ENV_TEMP));
-    DEBUG_PRINTF("2: Heater PWM            = %d\n", modbusTCP.Hreg(REG_HEATER_PWM));
-    DEBUG_PRINTF("3: Fan PWM               = %d\n", modbusTCP.Hreg(REG_FAN_PWM));
-    DEBUG_PRINTF("4: Bean Setpoint (SP)    = %d\n", modbusTCP.Hreg(REG_BEAN_SP));
-    DEBUG_PRINTF("5: Control Mode          = %d\n", modbusTCP.Hreg(REG_CONTROL_MODE));
-    DEBUG_PRINTF("6: Heater Override       = %d\n", modbusTCP.Hreg(REG_OVERRIDE_HEATER));
-    DEBUG_PRINTF("7: Kp                    = %d\n", modbusTCP.Hreg(REG_KP));
-    DEBUG_PRINTF("8: Ki                    = %d\n", modbusTCP.Hreg(REG_KI));
-    DEBUG_PRINTF("9: Kd                    = %d\n", modbusTCP.Hreg(REG_KD));
-    DEBUG_PRINTF("Mode: %s, BT: %.2f, SP: %.2f, Output: %d, Heater Override: %d\n",
+        lastSerialOutput = millis();
+        DEBUG_PRINTLN("Modbus Register Values:");
+        DEBUG_PRINTF("0: Bean Temp (BT)        = %d\n", modbusTCP.Hreg(REG_BEAN_TEMP));
+        DEBUG_PRINTF("1: Env Temp (ET)         = %d\n", modbusTCP.Hreg(REG_ENV_TEMP));
+        DEBUG_PRINTF("2: Heater PWM            = %d\n", modbusTCP.Hreg(REG_HEATER_PWM));
+        DEBUG_PRINTF("3: Fan PWM               = %d\n", modbusTCP.Hreg(REG_FAN_PWM));
+        DEBUG_PRINTF("4: Bean Setpoint (SP)    = %d\n", modbusTCP.Hreg(REG_BEAN_SP));
+        DEBUG_PRINTF("5: Control Mode          = %d\n", modbusTCP.Hreg(REG_CONTROL_MODE));
+        DEBUG_PRINTF("6: Heater Override       = %d\n", modbusTCP.Hreg(REG_OVERRIDE_HEATER));
+        DEBUG_PRINTF("7: Kp                    = %d\n", modbusTCP.Hreg(REG_KP));
+        DEBUG_PRINTF("8: Ki                    = %d\n", modbusTCP.Hreg(REG_KI));
+        DEBUG_PRINTF("9: Kd                    = %d\n", modbusTCP.Hreg(REG_KD));
+        DEBUG_PRINTF("Mode: %s, BT: %.2f, SP: %.2f, Output: %d, Heater Override: %d\n",
                      (controlMode == MODE_MANUAL) ? "Manual" : "Auto",
                      beanTemperature, beanSetpoint, static_cast<int>(heaterOutput), heaterOverride);
     }
@@ -267,6 +278,22 @@ void applyCalibration() {
 }
 
 void connectToWiFi(const char* ssid, const char* password) {
+    if (WiFi.status() == WL_CONNECTED) {
+        if (!wasWiFiConnected) { // Only log if the connection status has changed
+            DEBUG_PRINTLN("\nWiFi connected!");
+            DEBUG_PRINTF("IP Address: %s\n", WiFi.localIP().toString().c_str());
+            updateDebugMessage("WiFi connected. IP Address: " + WiFi.localIP().toString());
+            wasWiFiConnected = true; // Update the connection status
+        }
+        return; // Already connected, no need to reconnect
+    }
+
+    if (wasWiFiConnected) { // Only log if the connection status has changed
+        DEBUG_PRINTLN("\nWiFi disconnected! Attempting to reconnect...");
+        updateDebugMessage("WiFi disconnected! Attempting to reconnect...");
+        wasWiFiConnected = false; // Update the connection status
+    }
+
     DEBUG_PRINTLN("Connecting to WiFi...");
     WiFi.begin(ssid, password);
     unsigned long startAttemptTime = millis();
@@ -274,11 +301,15 @@ void connectToWiFi(const char* ssid, const char* password) {
         delay(500);
         DEBUG_PRINT(".");
     }
+
     if (WiFi.status() != WL_CONNECTED) {
         DEBUG_PRINTLN("\nWiFi connection failed! Running in offline mode.");
+        updateDebugMessage("WiFi connection failed! Running in offline mode.");
     } else {
         DEBUG_PRINTLN("\nWiFi connected!");
         DEBUG_PRINTF("IP Address: %s\n", WiFi.localIP().toString().c_str());
+        updateDebugMessage("WiFi connected. IP Address: " + WiFi.localIP().toString());
+        wasWiFiConnected = true; // Update the connection status
     }
 }
 
@@ -337,8 +368,18 @@ void handleWebServer() {
     html += "  <input type='number' id='fanPwmInput' step='1' min='0' max='100'>";
     html += "  <button onclick='updateFanPwm()'>Set Fan PWM</button>";
     html += "</div>";
+    html += "<div style='margin-top: 20px;'>"; // Debug Table
+    html += "<h3>Debug Log</h3>";
+    html += "<table id='debugTable' style='width: 80%; border-collapse: collapse; background-color: #1e1e1e; color: #e0e0e0;'>";
+    html += "<thead><tr>";
+    html += "<th style='border: 1px solid #333; padding: 10px; text-align: left; width: 20%;'>Timestamp</th>"; // Set width for timestamp column
+    html += "<th style='border: 1px solid #333; padding: 10px; text-align: left; width: 80%;'>Message</th>";    // Set width for message column
+    html += "</tr></thead>";
+    html += "<tbody></tbody>"; // Empty body to be dynamically updated
+    html += "</table>";
     html += "<footer>ESP32 Coffee Roaster &copy; 2025</footer>";
     html += "<script>";
+    html += "let debugMessages = [];"; // Array to store the latest 10 debug messages
     html += "function fetchData() {";
     html += "  fetch('/data')";
     html += "    .then(response => response.json())";
@@ -354,6 +395,23 @@ void handleWebServer() {
     html += "      document.getElementById('Ki').innerHTML = data.Ki;";
     html += "      document.getElementById('Kd').innerHTML = data.Kd;";
     html += "    });";
+    html += "}";
+    html += "function fetchDebugLog() {";
+    html += "  fetch('/debug')";
+    html += "    .then(response => response.json())";
+    html += "    .then(data => {";
+    html += "      const debugTableBody = document.getElementById('debugTable').querySelector('tbody');";
+    html += "      debugMessages.unshift(data.message);"; // Add the newest message to the top
+    html += "      if (debugMessages.length > 10) debugMessages.pop();"; // Keep only the latest 10 messages
+    html += "      debugTableBody.innerHTML = '';"; // Clear the table body
+    html += "      debugMessages.forEach((msg, index) => {"; // Add rows for each debug message
+    html += "        const row = document.createElement('tr');";
+    html += "        row.innerHTML = `<td style='border: 1px solid #333; padding: 10px;'>${new Date().toLocaleTimeString()}</td>";
+    html += "                         <td style='border: 1px solid #333; padding: 10px;'>${msg}</td>`;";
+    html += "        debugTableBody.appendChild(row);";
+    html += "      });";
+    html += "    })";
+    html += "    .catch(error => console.error('Error fetching debug log:', error));";
     html += "}";
     html += "function toggleHeaterEnable() {";
     html += "  fetch('/toggleHeaterEnable', { method: 'POST' })";
@@ -411,6 +469,7 @@ void handleWebServer() {
     html += "    });";
     html += "}";
     html += "setInterval(fetchData, 1000);";
+    html += "setInterval(fetchDebugLog, 1000);"; // Fetch debug log every second
     html += "</script>";
     html += "</body></html>";
 
@@ -473,6 +532,7 @@ void handleUpdateHeaterPwm() {
                 if (pwm >= 0 && pwm <= 100) { // Validate PWM range
                     modbusTCP.Hreg(REG_HEATER_PWM, static_cast<uint16_t>(pwm * 2.55)); // Scale to 0–255
                     server.send(200, "text/plain", "Heater PWM updated");
+                    updateDebugMessage("Heater PWM updated to " + String(modbusTCP.Hreg(REG_HEATER_PWM)));
                 } else {
                     server.send(400, "text/plain", "Invalid PWM value");
                 }
@@ -498,6 +558,7 @@ void handleUpdateFanPwm() {
                 if (pwm >= 0 && pwm <= 100) { // Validate PWM range
                     modbusTCP.Hreg(REG_FAN_PWM, static_cast<uint16_t>(pwm * 2.55)); // Scale to 0–255
                     server.send(200, "text/plain", "Fan PWM updated");
+                    updateDebugMessage("Fan PWM updated to " + String(modbusTCP.Hreg(REG_FAN_PWM)));
                 } else {
                     server.send(400, "text/plain", "Invalid PWM value");
                 }
@@ -510,6 +571,19 @@ void handleUpdateFanPwm() {
     } else {
         server.send(403, "text/plain", "Cannot update Fan PWM in Auto mode");
     }
+}
+
+void handleDebugRequest() {
+    DynamicJsonDocument doc(256);
+    doc["message"] = latestDebugMessage;
+    String json;
+    serializeJson(doc, json);
+    server.send(200, "application/json", json);
+}
+
+// Function to update the latest debug message
+void updateDebugMessage(const String& message) {
+    latestDebugMessage = message;
 }
 
 void autoTunePID() {
