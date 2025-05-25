@@ -108,6 +108,8 @@ void handleDataRequest(); // Prototype for the /data endpoint
 void handleToggleHeaterEnable(); // Prototype for the /toggleHeaterEnable endpoint
 void handleToggleControlMode(); // Prototype for the /toggleControlMode endpoint
 void handleUpdateBeanSetpoint(); // Prototype for the /updateBeanSetpoint endpoint
+void handleUpdateHeaterPwm(); // Prototype for the /updateHeaterPwm endpoint
+void handleUpdateFanPwm(); // Prototype for the /updateFanPwm endpoint
 
 void setup() {
     Serial.begin(115200);
@@ -160,6 +162,8 @@ void setup() {
     server.on("/toggleHeaterEnable", HTTP_POST, handleToggleHeaterEnable);
     server.on("/toggleControlMode", HTTP_POST, handleToggleControlMode);
     server.on("/updateBeanSetpoint", HTTP_POST, handleUpdateBeanSetpoint);
+    server.on("/updateHeaterPwm", HTTP_POST, handleUpdateHeaterPwm); // Register Heater PWM endpoint
+    server.on("/updateFanPwm", HTTP_POST, handleUpdateFanPwm);       // Register Fan PWM endpoint
     server.begin();
     DEBUG_PRINTLN("Web Server Started");
 }
@@ -318,10 +322,20 @@ void handleWebServer() {
     html += "<button id='controlModeButton' onclick='toggleControlMode()'>Toggle Control Mode</button>";
     html += "<button id='heaterEnableButton' onclick='toggleHeaterEnable()'>Toggle Heater Enable</button>";
     html += "</div>";
-    html += "<div style='margin-top: 20px;'>";
+    html += "<div style='margin-top: 20px;'>"; // Bean Setpoint
     html += "  <label for='beanSetpointInput'>Bean Setpoint (°C): </label>";
     html += "  <input type='number' id='beanSetpointInput' step='0.1'>";
     html += "  <button onclick='updateBeanSetpoint()'>Set Bean Setpoint</button>";
+    html += "</div>";
+    html += "<div style='margin-top: 20px;'>"; // Heater PWM
+    html += "  <label for='heaterPwmInput'>Heater PWM (%): </label>";
+    html += "  <input type='number' id='heaterPwmInput' step='1' min='0' max='100'>";
+    html += "  <button onclick='updateHeaterPwm()'>Set Heater PWM</button>";
+    html += "</div>";
+    html += "<div style='margin-top: 20px;'>"; // Fan PWM
+    html += "  <label for='fanPwmInput'>Fan PWM (%): </label>";
+    html += "  <input type='number' id='fanPwmInput' step='1' min='0' max='100'>";
+    html += "  <button onclick='updateFanPwm()'>Set Fan PWM</button>";
     html += "</div>";
     html += "<footer>ESP32 Coffee Roaster &copy; 2025</footer>";
     html += "<script>";
@@ -367,6 +381,32 @@ void handleWebServer() {
     html += "    .then(response => response.text())";
     html += "    .then(data => {";
     html += "      console.log('Bean Setpoint updated:', data);";
+    html += "      fetchData();"; // Refresh data after updating
+    html += "    });";
+    html += "}";
+    html += "function updateHeaterPwm() {";
+    html += "  const heaterPwm = document.getElementById('heaterPwmInput').value;";
+    html += "  fetch('/updateHeaterPwm', {";
+    html += "    method: 'POST',";
+    html += "    headers: { 'Content-Type': 'application/json' },";
+    html += "    body: JSON.stringify({ pwm: parseInt(heaterPwm) })";
+    html += "  })";
+    html += "    .then(response => response.text())";
+    html += "    .then(data => {";
+    html += "      console.log('Heater PWM updated:', data);";
+    html += "      fetchData();"; // Refresh data after updating
+    html += "    });";
+    html += "}";
+    html += "function updateFanPwm() {";
+    html += "  const fanPwm = document.getElementById('fanPwmInput').value;";
+    html += "  fetch('/updateFanPwm', {";
+    html += "    method: 'POST',";
+    html += "    headers: { 'Content-Type': 'application/json' },";
+    html += "    body: JSON.stringify({ pwm: parseInt(fanPwm) })";
+    html += "  })";
+    html += "    .then(response => response.text())";
+    html += "    .then(data => {";
+    html += "      console.log('Fan PWM updated:', data);";
     html += "      fetchData();"; // Refresh data after updating
     html += "    });";
     html += "}";
@@ -419,6 +459,56 @@ void handleUpdateBeanSetpoint() {
         }
     } else {
         server.send(400, "text/plain", "Invalid request");
+    }
+}
+
+void handleUpdateHeaterPwm() {
+    if (modbusTCP.Hreg(REG_CONTROL_MODE) == MODE_MANUAL) { // Only allow updates in Manual mode
+        if (server.hasArg("plain")) {
+            String body = server.arg("plain");
+            DynamicJsonDocument doc(1024);
+            deserializeJson(doc, body);
+            if (doc.containsKey("pwm")) {
+                int pwm = doc["pwm"];
+                if (pwm >= 0 && pwm <= 100) { // Validate PWM range
+                    modbusTCP.Hreg(REG_HEATER_PWM, static_cast<uint16_t>(pwm * 2.55)); // Scale to 0–255
+                    server.send(200, "text/plain", "Heater PWM updated");
+                } else {
+                    server.send(400, "text/plain", "Invalid PWM value");
+                }
+            } else {
+                server.send(400, "text/plain", "Invalid request");
+            }
+        } else {
+            server.send(400, "text/plain", "Invalid request");
+        }
+    } else {
+        server.send(403, "text/plain", "Cannot update Heater PWM in Auto mode");
+    }
+}
+
+void handleUpdateFanPwm() {
+    if (modbusTCP.Hreg(REG_CONTROL_MODE) == MODE_MANUAL) { // Only allow updates in Manual mode
+        if (server.hasArg("plain")) {
+            String body = server.arg("plain");
+            DynamicJsonDocument doc(1024);
+            deserializeJson(doc, body);
+            if (doc.containsKey("pwm")) {
+                int pwm = doc["pwm"];
+                if (pwm >= 0 && pwm <= 100) { // Validate PWM range
+                    modbusTCP.Hreg(REG_FAN_PWM, static_cast<uint16_t>(pwm * 2.55)); // Scale to 0–255
+                    server.send(200, "text/plain", "Fan PWM updated");
+                } else {
+                    server.send(400, "text/plain", "Invalid PWM value");
+                }
+            } else {
+                server.send(400, "text/plain", "Invalid request");
+            }
+        } else {
+            server.send(400, "text/plain", "Invalid request");
+        }
+    } else {
+        server.send(403, "text/plain", "Cannot update Fan PWM in Auto mode");
     }
 }
 
