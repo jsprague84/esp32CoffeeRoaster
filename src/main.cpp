@@ -1,4 +1,3 @@
-//This is the code that was updated 4/14/25. added mqtt function.  It does need work on autotune.
 #include <SPI.h>
 #include <Arduino.h>
 #include <WiFi.h>
@@ -10,6 +9,7 @@
 #include <WebServer.h>
 #include "driver/gpio.h"
 #include "config.h"
+#include <ArduinoJson.h>
 
 // Debugging Macro
 #define DEBUG true
@@ -23,7 +23,7 @@
   #define DEBUG_PRINTF(fmt, ...)
 #endif
 
-// Wi-Fi Credentials *use seperate config.h file to set these, or uncomment below*
+// Wi-Fi Credentials *use the seperate /include/config.h file to set these, or uncomment below*
 //const char* ssid = "your_SSID";
 //const char* password = "your_PASSWORD";
 
@@ -105,6 +105,9 @@ void savePIDParameters();
 void loadPIDParameters();
 void handleWebServer();
 void handleDataRequest(); // Prototype for the /data endpoint
+void handleToggleHeaterEnable(); // Prototype for the /toggleHeaterEnable endpoint
+void handleToggleControlMode(); // Prototype for the /toggleControlMode endpoint
+void handleUpdateBeanSetpoint(); // Prototype for the /updateBeanSetpoint endpoint
 
 void setup() {
     Serial.begin(115200);
@@ -154,6 +157,9 @@ void setup() {
     // Start Web Server
     server.on("/", handleWebServer);
     server.on("/data", handleDataRequest);
+    server.on("/toggleHeaterEnable", HTTP_POST, handleToggleHeaterEnable);
+    server.on("/toggleControlMode", HTTP_POST, handleToggleControlMode);
+    server.on("/updateBeanSetpoint", HTTP_POST, handleUpdateBeanSetpoint);
     server.begin();
     DEBUG_PRINTLN("Web Server Started");
 }
@@ -290,6 +296,7 @@ void handleWebServer() {
     html += "button { background-color: #2196F3; color: white; border: none; padding: 10px 20px; border-radius: 5px; font-size: 1em; cursor: pointer; box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2); transition: background-color 0.3s ease, transform 0.2s ease; }";
     html += "button:hover { background-color: #1976D2; transform: scale(1.05); }";
     html += "button:active { transform: scale(0.95); }";
+    html += ".button-container { display: flex; gap: 10px; margin-top: 20px; }"; // Flexbox container for buttons
     html += "</style>";
     html += "</head><body>";
     html += "<h1>ESP32 Coffee Roaster</h1>";
@@ -307,6 +314,15 @@ void handleWebServer() {
     html += "<tr><td>8</td><td>Ki</td><td id='Ki'>Loading...</td></tr>";
     html += "<tr><td>9</td><td>Kd</td><td id='Kd'>Loading...</td></tr>";
     html += "</table>";
+    html += "<div class='button-container'>"; // Flexbox container for buttons
+    html += "<button id='controlModeButton' onclick='toggleControlMode()'>Toggle Control Mode</button>";
+    html += "<button id='heaterEnableButton' onclick='toggleHeaterEnable()'>Toggle Heater Enable</button>";
+    html += "</div>";
+    html += "<div style='margin-top: 20px;'>";
+    html += "  <label for='beanSetpointInput'>Bean Setpoint (°C): </label>";
+    html += "  <input type='number' id='beanSetpointInput' step='0.1'>";
+    html += "  <button onclick='updateBeanSetpoint()'>Set Bean Setpoint</button>";
+    html += "</div>";
     html += "<footer>ESP32 Coffee Roaster &copy; 2025</footer>";
     html += "<script>";
     html += "function fetchData() {";
@@ -323,6 +339,35 @@ void handleWebServer() {
     html += "      document.getElementById('Kp').innerHTML = data.Kp;";
     html += "      document.getElementById('Ki').innerHTML = data.Ki;";
     html += "      document.getElementById('Kd').innerHTML = data.Kd;";
+    html += "    });";
+    html += "}";
+    html += "function toggleHeaterEnable() {";
+    html += "  fetch('/toggleHeaterEnable', { method: 'POST' })";
+    html += "    .then(response => response.text())";
+    html += "    .then(data => {";
+    html += "      console.log('Heater Enable toggled:', data);";
+    html += "      fetchData();"; // Refresh data after toggling
+    html += "    });";
+    html += "}";
+    html += "function toggleControlMode() {";
+    html += "  fetch('/toggleControlMode', { method: 'POST' })";
+    html += "    .then(response => response.text())";
+    html += "    .then(data => {";
+    html += "      console.log('Control Mode toggled:', data);";
+    html += "      fetchData();"; // Refresh data after toggling
+    html += "    });";
+    html += "}";
+    html += "function updateBeanSetpoint() {";
+    html += "  const setpoint = document.getElementById('beanSetpointInput').value;";
+    html += "  fetch('/updateBeanSetpoint', {";
+    html += "    method: 'POST',";
+    html += "    headers: { 'Content-Type': 'application/json' },";
+    html += "    body: JSON.stringify({ setpoint: parseFloat(setpoint) })";
+    html += "  })";
+    html += "    .then(response => response.text())";
+    html += "    .then(data => {";
+    html += "      console.log('Bean Setpoint updated:', data);";
+    html += "      fetchData();"; // Refresh data after updating
     html += "    });";
     html += "}";
     html += "setInterval(fetchData, 1000);";
@@ -346,6 +391,35 @@ void handleDataRequest() {
     json += "\"Kd\":" + String(Kd, 2);
     json += "}";
     server.send(200, "application/json", json);
+}
+
+void handleToggleHeaterEnable() {
+    int currentOverride = modbusTCP.Hreg(REG_OVERRIDE_HEATER);
+    modbusTCP.Hreg(REG_OVERRIDE_HEATER, currentOverride == 0 ? 1 : 0);
+    server.send(200, "text/plain", "Heater Enable toggled");
+}
+
+void handleToggleControlMode() {
+    int currentMode = modbusTCP.Hreg(REG_CONTROL_MODE);
+    modbusTCP.Hreg(REG_CONTROL_MODE, currentMode == MODE_MANUAL ? MODE_AUTO : MODE_MANUAL);
+    server.send(200, "text/plain", "Control Mode toggled");
+}
+
+void handleUpdateBeanSetpoint() {
+    if (server.hasArg("plain")) {
+        String body = server.arg("plain");
+        DynamicJsonDocument doc(1024);
+        deserializeJson(doc, body);
+        if (doc.containsKey("setpoint")) {
+            beanSetpoint = doc["setpoint"];
+            modbusTCP.Hreg(REG_BEAN_SP, static_cast<uint16_t>(beanSetpoint * 10));
+            server.send(200, "text/plain", "Bean Setpoint updated");
+        } else {
+            server.send(400, "text/plain", "Invalid request");
+        }
+    } else {
+        server.send(400, "text/plain", "Invalid request");
+    }
 }
 
 void autoTunePID() {
